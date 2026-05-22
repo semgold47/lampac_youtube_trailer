@@ -3,6 +3,11 @@ const { spawn } = require('child_process');
 const { SocksProxyAgent } = require('socks-proxy-agent');
 const https = require('https');
 
+// ---------- ТВОЙ SOCKS5 ----------
+const SOCKS_PROXY_URL = 'socks5://user:password@155.55.55.5:9119';
+const agent = new SocksProxyAgent(SOCKS_PROXY_URL);
+// ---------------------------------
+
 const app = express();
 app.use(express.json());
 
@@ -16,25 +21,80 @@ app.use((req, res, next) => {
 
 app.get('/', (req, res) => res.send('YT Trailer Proxy OK'));
 
-// Стриминг видео (через yt-dlp) — socks5_url передаётся как query-параметр
+
+app.get('/search', (req, res) => {
+    const q = req.query.q;   // поисковый запрос
+    if (!q) return res.status(400).json({ error: 'Missing search query' });
+
+    // yt-dlp может искать на YouTube: ytsearch10:запрос
+    // --flat-playlist даёт только список видео без деталей, работает быстро
+    const searchQuery = `ytsearch10:${q}`;
+    const args = [
+        '--proxy', SOCKS_PROXY_URL,
+        '--flat-playlist',
+        '--dump-single-json',
+        '--no-playlist',
+        searchQuery
+    ];
+
+    console.log(`Searching: ${searchQuery}`);
+    const ytProcess = spawn('yt-dlp', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+
+    ytProcess.stdout.on('data', (data) => { stdout += data; });
+    ytProcess.stderr.on('data', (data) => { stderr += data; });
+
+    ytProcess.on('close', (code) => {
+        if (code !== 0) {
+            console.error('yt-dlp search error:', stderr);
+            return res.status(500).json({ error: 'Search failed' });
+        }
+        try {
+            const json = JSON.parse(stdout);
+            // Извлекаем нужные поля
+            const results = (json.entries || []).map(entry => ({
+                id: entry.id || entry.video_id,
+                title: entry.title || '',
+                channel: entry.channel || entry.uploader || '',
+                thumbnail: entry.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${entry.id}/mqdefault.jpg`
+            }));
+            res.json(results);
+        } catch (e) {
+            console.error('Failed to parse search results:', e);
+            res.status(500).json({ error: 'Invalid search results' });
+        }
+    });
+});
+
+// ---------- Стриминг видео ----------
 app.get('/stream', (req, res) => {
     const videoId = req.query.videoId;
-    const socks5 = req.query.socks5;   // ← приходит из плагина
+    const quality = req.query.quality || 'auto';
 
     if (!videoId) return res.status(400).send('Missing videoId');
-    if (!socks5) return res.status(400).send('Missing socks5 proxy');
+
+    let format;
+    switch (quality) {
+        case '2160p': format = 'bestvideo[height<=2160]+bestaudio/best[height<=2160]'; break;
+        case '1440p': format = 'bestvideo[height<=1440]+bestaudio/best[height<=1440]'; break;
+        case '1080p': format = 'bestvideo[height<=1080]+bestaudio/best[height<=1080]'; break;
+        case '720p':  format = 'bestvideo[height<=720]+bestaudio/best[height<=720]';   break;
+        case '480p':  format = 'bestvideo[height<=480]+bestaudio/best[height<=480]';   break;
+        case '360p':  format = 'bestvideo[height<=360]+bestaudio/best[height<=360]';   break;
+        default:      format = 'bestvideo+bestaudio/best';
+    }
 
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const args = [
-        '--proxy', socks5,
-        '-f', 'bestvideo+bestaudio/best',
+        '--proxy', SOCKS_PROXY_URL,
+        '-f', format,
         '-o', '-',
         '--no-playlist',
         youtubeUrl
     ];
 
-    console.log(`Streaming ${youtubeUrl} via ${socks5}`);
-
+    console.log(`Streaming ${youtubeUrl} (quality: ${quality})`);
     const ytProcess = spawn('yt-dlp', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     res.writeHead(200, { 'Content-Type': 'video/mp4' });
     ytProcess.stdout.pipe(res);
@@ -46,25 +106,22 @@ app.get('/stream', (req, res) => {
     });
 });
 
-// Проксирование превьюшек — socks5_url тоже через query
+// ---------- Превью (прокси) ----------
 app.get('/thumbnail', (req, res) => {
     const videoId = req.query.videoId;
     const size = req.query.size || 'mq';
-    const socks5 = req.query.socks5;
 
     if (!videoId) return res.status(400).send('Missing videoId');
-    if (!socks5) return res.status(400).send('Missing socks5 proxy');
 
     const options = {
         hostname: 'i.ytimg.com',
         path: `/vi/${videoId}/${size}default.jpg`,
         method: 'GET',
-        agent: new SocksProxyAgent(socks5),   // ← создаётся под каждый запрос
+        agent: agent,
         headers: { 'User-Agent': 'Mozilla/5.0' }
     };
 
-    console.log(`Proxying thumbnail: https://i.ytimg.com/vi/${videoId}/${size}default.jpg via ${socks5}`);
-
+    console.log(`Proxying thumbnail: https://i.ytimg.com/vi/${videoId}/${size}default.jpg`);
     const thumbReq = https.request(options, (thumbRes) => {
         res.writeHead(thumbRes.statusCode, {
             'Content-Type': thumbRes.headers['content-type'] || 'image/jpeg',
