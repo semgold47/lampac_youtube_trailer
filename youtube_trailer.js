@@ -103,7 +103,7 @@
                 name: PLUGIN_NAME + '_proxy',
                 type: 'input',
                 values: '',
-                placeholder: 'http://150.241.94.1:3000',
+                placeholder: 'http://155.55.55.5:3000',
                 default: 'http://'
             },
             field: {
@@ -278,7 +278,7 @@ root@novoe:/opt/lampac/wwwroot# cat test.js
                 name: PLUGIN_NAME + '_proxy',
                 type: 'input',
                 values: '',
-                placeholder: 'http://150.241.94.1:3000',
+                placeholder: 'http://155.55.55.5:3000',
                 default: 'http://'
             },
             field: {
@@ -299,7 +299,7 @@ root@novoe:/opt/lampac/wwwroot# cat test.js
             },
             field: {
                 name: 'SOCKS5 прокси',
-                description: 'Прокси для YouTube (только локально!)'
+                description: 'Прокси для YouTube'
             }
         });
     }
