@@ -27,7 +27,7 @@ app.get('/stream', (req, res) => {
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
     const args = [
         '--proxy', socks5,
-        '-f', 'best[ext=mp4]',
+        '-f', 'bestvideo+bestaudio/best',
         '-o', '-',
         '--no-playlist',
         youtubeUrl
