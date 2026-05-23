@@ -21,6 +21,7 @@
         throw new Error('Трейлеры не найдены');
     }
 
+    // ---------- Воспроизведение (с защитой от числового индекса) ----------
     function playTrailer(videoId, title) {
         const proxyBase = Lampa.Storage.get(PLUGIN_NAME + '_proxy', '');
         const qualitySaved = Lampa.Storage.get(PLUGIN_NAME + '_quality', '');
