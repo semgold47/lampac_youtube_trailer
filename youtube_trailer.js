@@ -21,36 +21,6 @@
         throw new Error('Трейлеры не найдены');
     }
 
-    // ---------- Воспроизведение (с защитой от числового индекса) ----------
-    function playTrailer(videoId, title) {
-        const proxyBase = Lampa.Storage.get(PLUGIN_NAME + '_proxy', '');
-        const qualitySaved = Lampa.Storage.get(PLUGIN_NAME + '_quality', '');
-
-        // Преобразуем числовой индекс в строку, если нужно
-        const qualityList = ['auto', '2160p', '1440p', '1080p', '720p', '480p', '360p'];
-        let quality = qualitySaved;
-        if (!isNaN(parseInt(qualitySaved))) {
-            quality = qualityList[parseInt(qualitySaved)] || 'auto';
-        } else if (!qualitySaved) {
-            quality = 'auto';
-        }
-
-        if (!proxyBase) {
-            Lampa.Noty.show('Укажи адрес прокси в настройках');
-            return;
-        }
-
-        const streamUrl = proxyBase.replace(/\/$/, '') +
-            '/stream?videoId=' + videoId +
-            '&quality=' + encodeURIComponent(quality);
-
-        Lampa.Player.play({
-            title: `Трейлер: ${title}`,
-            url: streamUrl,
-            type: 'video/mp4'
-        });
-    }
-
     // ---------- Показать список трейлеров ----------
     async function showTrailerList(movie) {
         try {
@@ -58,19 +28,36 @@
             const trailers = await fetchTrailers(movie.title, movie.year);
             const proxyBase = Lampa.Storage.get(PLUGIN_NAME + '_proxy', '').replace(/\/$/, '');
 
+            // --- Исправление качества: преобразуем индекс в строку ---
+            const qualityList = ['auto', '2160p', '1440p', '1080p', '720p', '480p', '360p'];
+            let qualitySaved = Lampa.Storage.get(PLUGIN_NAME + '_quality', '');
+            let quality = qualitySaved;
+            if (!isNaN(parseInt(qualitySaved))) {
+                quality = qualityList[parseInt(qualitySaved)] || 'auto';
+            } else if (!qualitySaved) {
+                quality = 'auto';
+            }
+            // ---------------------------------------------------------
+
+            // Формируем элементы для селекта и плейлиста
             const items = trailers.map(t => ({
                 title: t.title,
                 subtitle: t.channel,
+                url: proxyBase + '/stream?videoId=' + t.id + '&quality=' + encodeURIComponent(quality),
                 icon: `<img src="${proxyBase}/thumbnail?videoId=${t.id}&size=mq" class="size-youtube">`,
                 template: 'selectbox_icon',
-                value: t.id
+                iptv: true
             }));
 
             Lampa.Select.show({
                 title: 'Трейлеры: ' + movie.title,
                 items: items,
-                onSelect: (item) => {
-                    playTrailer(item.value, item.title);
+                onSelect: function (item) {
+                    Lampa.Player.play(item);
+                    Lampa.Player.playlist(items);
+                },
+                onBack: function () {
+                    Lampa.Controller.toggle('full_start');
                 }
             });
         } catch (e) {
