@@ -7,7 +7,7 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  YT Trailer Proxy + Lampa Plugin Setup  ${NC}"
@@ -50,46 +50,40 @@ if ! command -v pm2 &> /dev/null; then
     npm install -g pm2
 fi
 
-# 6. Создание директории и установка зависимостей
+# 6. Создание папки проекта и загрузка файлов из репозитория
 echo -e "${GREEN}[4/6] Настройка сервера...${NC}"
-PROJECT_DIR="/opt/yt-proxy"
-mkdir -p $PROJECT_DIR
-cd $PROJECT_DIR
+PROJECT_DIR="/opt/lampac_youtube_trailer"
+mkdir -p "$PROJECT_DIR"
+cd "$PROJECT_DIR"
 
-# Если репозиторий уже склонирован, обновим; иначе скачаем server.js из вашего репо
-if [ -d ".git" ]; then
-    git pull
-else
-    # Предположим, что файлы в репозитории уже здесь? Или скачаем напрямую
-    wget -q https://raw.githubusercontent.com/semgold47/lampac_youtube_trailer/main/server.js -O server.js
-fi
+# Скачиваем актуальные server.js и youtube_trailer.js
+wget -q https://raw.githubusercontent.com/semgold47/lampac_youtube_trailer/main/server.js -O server.js
+wget -q https://raw.githubusercontent.com/semgold47/lampac_youtube_trailer/main/youtube_trailer.js -O youtube_trailer.js
 
-# Запишем SOCKS5 в .env для сервера
-echo "SOCKS_PROXY_URL=$SOCKS5" > .env
-
-# Установка npm модулей
-if [ ! -d "node_modules" ]; then
+# Установка npm-зависимостей (express, socks-proxy-agent, dotenv)
+if [ ! -f "package.json" ]; then
     npm init -y &> /dev/null
 fi
-npm install express socks-proxy-agent &> /dev/null
+npm install express socks-proxy-agent dotenv &> /dev/null
+
+# Создаём .env с SOCKS5
+echo "SOCKS_PROXY_URL=$SOCKS5" > .env
 
 # 7. Запуск сервера через pm2
 echo -e "${GREEN}[5/6] Запускаем прокси-сервер...${NC}"
-pm2 delete yt-proxy &> /dev/null || true
-pm2 start server.js --name yt-proxy
+pm2 delete lampac_youtube_trailer &> /dev/null || true
+pm2 start server.js --name lampac_youtube_trailer
 pm2 save
 pm2 startup systemd &> /dev/null || true
 
 # 8. Размещение плагина в /opt/lampac/wwwroot/
 echo -e "${GREEN}[6/6] Копируем плагин в /opt/lampac/wwwroot/...${NC}"
 mkdir -p /opt/lampac/wwwroot/
-wget -q https://raw.githubusercontent.com/semgold47/lampac_youtube_trailer/main/youtube_trailer.js -O /opt/lampac/wwwroot/youtube_trailer.js
+cp youtube_trailer.js /opt/lampac/wwwroot/youtube_trailer.js
 
-# Получение внешнего IP (если доступен)
+# Получаем IP сервера
 SERVER_IP=$(hostname -I | awk '{print $1}')
-if [ -z "$SERVER_IP" ]; then
-    SERVER_IP="ВАШ_IP"
-fi
+[ -z "$SERVER_IP" ] && SERVER_IP="ВАШ_IP"
 
 echo ""
 echo -e "${GREEN}========================================${NC}"
@@ -112,4 +106,5 @@ echo -e "После добавления зайдите в Настройки �
 echo -e "   - Прокси сервер: http://${SERVER_IP}:3000"
 echo -e "   - Качество видео (выбрать из списка)"
 echo ""
+echo -e "SOCKS5 спрятан в /opt/lampac_youtube_trailer/.env и не виден клиенту."
 echo -e "Готово!"
