@@ -5,7 +5,7 @@ const { SocksProxyAgent } = require('socks-proxy-agent');
 const https = require('https');
 
 // ---------- ТВОЙ SOCKS5 ----------
-const SOCKS_PROXY_URL = 'socks5://user:password@155.55.55.5:9119';
+const SOCKS_PROXY_URL = process.env.SOCKS_PROXY_URL;
 const agent = new SocksProxyAgent(SOCKS_PROXY_URL);
 // ---------------------------------
 
